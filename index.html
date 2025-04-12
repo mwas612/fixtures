@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TELECOM Efootball Tournment</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #2e8be7;
+      padding: 20px;
+    }
+
+    h1, h2 {
+      color: #333;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+
+    th, td {
+      border: 1px solid #350a7a;
+      padding: 8px;
+      text-align: center;
+    }
+
+    #fixtures table th {
+      background-color: #0dd117;
+    }
+
+    #leagueTable th {
+      background-color: #c731a6;
+    }
+
+    input[type="number"] {
+      width: 40px;
+      padding: 3px;
+      border-radius: 4px;
+      border: 1px solid #b81717;
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 10px 15px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #a17d7e;
+    }
+
+    .team-label {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Football Fixtures - Live Table with Team Colors</h1>
+  <div id="fixtures"></div>
+  <button onclick="clearData()">Clear Saved Scores</button>
+
+  <h2>League Table</h2>
+  <div id="table"></div>
+  <button onclick="exportCSV()">Download Table as CSV</button>
+
+  <script>
+    const teams = ["NYOIKE", "OSCAR", "ROTICH", "VICKY", "CASTRO", "SILENT ETHICS", "DRIP", "WANYOIKE", "CHALOH", "VINCE"];
+
+    const teamColors = {
+      "NYOIKE": "#ffe0e0",
+      "OSCAR": "#e0f0ff",
+      "ROTICH": "#e0ffe0",
+      "VICKY": "#fff0e0",
+      "CASTRO": "#f0e0ff",
+      "SILENT ETHICS": "#fefbd8",
+      "DRIP": "#e6ffe6",
+      "WANYOIKE": "#f9e0ff",
+      "CHALOH": "#e0f7f9",
+      "VINCE": "#f0f8ff"
+    };
+
+    let fixtures = [];
+
+    // Generate fixtures
+    for (let i = 0; i < teams.length; i++) {
+      for (let j = i + 1; j < teams.length; j++) {
+        fixtures.push({
+          team1: teams[i],
+          team2: teams[j],
+          score1: null,
+          score2: null
+        });
+      }
+    }
+
+    function displayFixtures() {
+      let html = `<table><tr><th>#</th><th>Match</th><th>Score</th></tr>`;
+      fixtures.forEach((match, index) => {
+        let val1 = match.score1 !== null ? match.score1 : '';
+        let val2 = match.score2 !== null ? match.score2 : '';
+        const color1 = teamColors[match.team1];
+        const color2 = teamColors[match.team2];
+
+        html += `<tr style="background-color:${color1}">
+          <td>${index + 1}</td>
+          <td>
+            <span class="team-label">${match.team1}</span> vs 
+            <span class="team-label">${match.team2}</span>
+          </td>
+          <td>
+            <input type="number" id="score1-${index}" min="0" value="${val1}" oninput="handleInput(${index})" /> -
+            <input type="number" id="score2-${index}" min="0" value="${val2}" oninput="handleInput(${index})" />
+          </td>
+        </tr>`;
+      });
+      html += `</table>`;
+      document.getElementById("fixtures").innerHTML = html;
+    }
+
+    function handleInput(index) {
+      const s1 = parseInt(document.getElementById(`score1-${index}`).value);
+      const s2 = parseInt(document.getElementById(`score2-${index}`).value);
+
+      fixtures[index].score1 = isNaN(s1) ? null : s1;
+      fixtures[index].score2 = isNaN(s2) ? null : s2;
+
+      localStorage.setItem("savedFixtures", JSON.stringify(fixtures));
+      updateResults();
+    }
+
+    function updateResults() {
+      let standings = {};
+      teams.forEach(team => {
+        standings[team] = {
+          played: 0, won: 0, drawn: 0, lost: 0,
+          gf: 0, ga: 0, points: 0
+        };
+      });
+
+      fixtures.forEach((match) => {
+        let s1 = match.score1;
+        let s2 = match.score2;
+        if (s1 === null || s2 === null) return;
+
+        const t1 = match.team1;
+        const t2 = match.team2;
+
+        standings[t1].played++;
+        standings[t2].played++;
+
+        standings[t1].gf += s1;
+        standings[t1].ga += s2;
+
+        standings[t2].gf += s2;
+        standings[t2].ga += s1;
+
+        if (s1 > s2) {
+          standings[t1].won++;
+          standings[t2].lost++;
+          standings[t1].points += 3;
+        } else if (s1 < s2) {
+          standings[t2].won++;
+          standings[t1].lost++;
+          standings[t2].points += 3;
+        } else {
+          standings[t1].drawn++;
+          standings[t2].drawn++;
+          standings[t1].points += 1;
+          standings[t2].points += 1;
+        }
+      });
+
+      displayTable(standings);
+    }
+
+    function displayTable(standings) {
+      let sorted = Object.entries(standings).sort((a, b) => {
+        let ptsDiff = b[1].points - a[1].points;
+        if (ptsDiff !== 0) return ptsDiff;
+        let gdDiff = (b[1].gf - b[1].ga) - (a[1].gf - a[1].ga);
+        if (gdDiff !== 0) return gdDiff;
+        return b[1].gf - a[1].gf;
+      });
+
+      let html = `<table id="leagueTable">
+        <tr>
+          <th>Pos</th><th>Team</th><th>Played</th><th>W</th><th>D</th><th>L</th>
+          <th>GF</th><th>GA</th><th>GD</th><th>Points</th>
+        </tr>`;
+
+      sorted.forEach(([team, stats], index) => {
+        let gd = stats.gf - stats.ga;
+        const bgColor = teamColors[team] || "#ffffff";
+
+        html += `<tr style="background-color: ${bgColor};">
+          <td>${index + 1}</td>
+          <td><span class="team-label">${team}</span></td>
+          <td>${stats.played}</td>
+          <td>${stats.won}</td>
+          <td>${stats.drawn}</td>
+          <td>${stats.lost}</td>
+          <td>${stats.gf}</td>
+          <td>${stats.ga}</td>
+          <td>${gd}</td>
+          <td>${stats.points}</td>
+        </tr>`;
+      });
+
+      html += `</table>`;
+      document.getElementById("table").innerHTML = html;
+    }
+
+    function loadSavedData() {
+      const saved = localStorage.getItem("savedFixtures");
+      if (saved) {
+        fixtures = JSON.parse(saved);
+      }
+    }
+
+    function clearData() {
+      localStorage.removeItem("savedFixtures");
+      fixtures.forEach(f => { f.score1 = null; f.score2 = null; });
+      displayFixtures();
+      updateResults();
+    }
+
+    function exportCSV() {
+      const rows = [];
+      rows.push(["Position", "Team", "Played", "Won", "Drawn", "Lost", "GF", "GA", "GD", "Points"]);
+      
+      const standings = {};
+      teams.forEach(team => {
+        standings[team] = {
+          played: 0, won: 0, drawn: 0, lost: 0,
+          gf: 0, ga: 0, points: 0
+        };
+      });
+
+      fixtures.forEach((match) => {
+        let s1 = match.score1;
+        let s2 = match.score2;
+        if (s1 === null || s2 === null) return;
+
+        const t1 = match.team1;
+        const t2 = match.team2;
+
+        standings[t1].played++;
+        standings[t2].played++;
+
+        standings[t1].gf += s1;
+        standings[t1].ga += s2;
+
+        standings[t2].gf += s2;
+        standings[t2].ga += s1;
+
+        if (s1 > s2) {
+          standings[t1].won++;
+          standings[t2].lost++;
+          standings[t1].points += 3;
+        } else if (s1 < s2) {
+          standings[t2].won++;
+          standings[t1].lost++;
+          standings[t2].points += 3;
+        } else {
+          standings[t1].drawn++;
+          standings[t2].drawn++;
+          standings[t1].points += 1;
+          standings[t2].points += 1;
+        }
+      });
+
+      let sorted = Object.entries(standings).sort((a, b) => {
+        let ptsDiff = b[1].points - a[1].points;
+        if (ptsDiff !== 0) return ptsDiff;
+        let gdDiff = (b[1].gf - b[1].ga) - (a[1].gf - a[1].ga);
+        if (gdDiff !== 0) return gdDiff;
+        return b[1].gf - a[1].gf;
+      });
+
+      sorted.forEach(([team, stats], index) => {
+        let gd = stats.gf - stats.ga;
+        rows.push([index + 1, team, stats.played, stats.won, stats.drawn, stats.lost, stats.gf, stats.ga, gd, stats.points]);
+      });
+
+      let csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+      const link = document.createElement("a");
+      link.setAttribute("href", csvContent);
+      link.setAttribute("download", "league_table.csv");
+      link.click();
+    }
+
+    // Load saved data and display
+    loadSavedData();
+    displayFixtures();
+    updateResults();
+  </script>
+</body>
+</html>
